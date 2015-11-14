@@ -50,7 +50,6 @@ public class MachineDataOutputFormat extends TextOutputFormat<LongWritable, Text
 
         public synchronized void write(LongWritable key,
                                        Text value) throws IOException {
-            log.info("writer:\t[key:" + key + ",value:" + value + "]");
             byte[] keyBytes = key.toString().getBytes();
             out.write(keyBytes, 0, keyBytes.length);
             out.write(tab, 0, tab.length);

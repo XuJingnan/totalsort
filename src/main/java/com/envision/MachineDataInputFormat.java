@@ -1,7 +1,6 @@
 package com.envision;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.*;
@@ -11,12 +10,12 @@ import java.io.IOException;
 /**
  * Created by xujingnan on 15-11-13.
  */
-public class MachineDataInputFormat extends FileInputFormat<DoubleWritable, Text> {
+public class MachineDataInputFormat extends FileInputFormat<DoubleDescWritable, Text> {
 
     private JobConf lastConf = null;
     private InputSplit[] lastResult = null;
 
-    class MachineDataRecordReader implements RecordReader<DoubleWritable, Text> {
+    class MachineDataRecordReader implements RecordReader<DoubleDescWritable, Text> {
         private LineRecordReader in;
         private LongWritable junk = new LongWritable();
         private Text line = new Text();
@@ -28,7 +27,7 @@ public class MachineDataInputFormat extends FileInputFormat<DoubleWritable, Text
         }
 
         @Override
-        public boolean next(DoubleWritable key, Text value) throws IOException {
+        public boolean next(DoubleDescWritable key, Text value) throws IOException {
             if (in.next(junk, line)) {
                 String tmp = line.toString();
                 tmp = tmp.substring(0, tmp.length() - 1);
@@ -41,8 +40,8 @@ public class MachineDataInputFormat extends FileInputFormat<DoubleWritable, Text
         }
 
         @Override
-        public DoubleWritable createKey() {
-            return new DoubleWritable();
+        public DoubleDescWritable createKey() {
+            return new DoubleDescWritable();
         }
 
         @Override
@@ -67,7 +66,7 @@ public class MachineDataInputFormat extends FileInputFormat<DoubleWritable, Text
     }
 
     @Override
-    public RecordReader<DoubleWritable, Text> getRecordReader(InputSplit inputSplit, JobConf conf, Reporter reporter) throws IOException {
+    public RecordReader<DoubleDescWritable, Text> getRecordReader(InputSplit inputSplit, JobConf conf, Reporter reporter) throws IOException {
         return new MachineDataRecordReader(conf, (FileSplit) inputSplit);
     }
 
