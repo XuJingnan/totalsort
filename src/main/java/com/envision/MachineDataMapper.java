@@ -12,7 +12,6 @@ import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.lib.IdentityMapper;
 
-import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,40 +24,27 @@ public class MachineDataMapper extends IdentityMapper<DoubleDescWritable, Text> 
     private final Log log = LogFactory.getLog(MachineDataMapper.class);
     public static ArrayList<Integer> reduceInputRecords;
     private int reduceNumber;
-    private String mapTaskId;
+    private String mapIdString;
     private FSDataOutputStream out;
 
     @Override
     public void configure(JobConf conf) {
         super.configure(conf);
 
-        final String PATH_SUFFIX = ".reduce.input.records";
-        final String FILE_NAME = "records";
-
         reduceNumber = conf.getNumReduceTasks();
         reduceInputRecords = new ArrayList<Integer>(reduceNumber);
         for (int i = 0; i < reduceNumber; i++) {
             reduceInputRecords.add(0);
         }
-        mapTaskId = conf.get("mapred.task.id");
-        log.info("task id:" + mapTaskId);
+        mapIdString = MachineDataTool.getID(conf.get("mapred.task.id"), true);
+        log.info("task id:" + mapIdString);
 
-        String reduceInputRecordsDir = conf.get("mapred.output.dir");
-        if (reduceInputRecordsDir.endsWith("/")) {
-            reduceInputRecordsDir = reduceInputRecordsDir.substring(0, reduceInputRecordsDir.length() - 1);
-        }
-        reduceInputRecordsDir = reduceInputRecordsDir.concat(PATH_SUFFIX);
-        log.info("dir:" + reduceInputRecordsDir);
+        Path parent = MachineDataTool.getReduceInputRecordsPath(conf.get("mapred.output.dir"));
         try {
-            Path dir = new Path(reduceInputRecordsDir);
-            FileSystem fs = dir.getFileSystem(conf);
-            if (!fs.exists(dir)) {
-                log.info("create dir");
-                fs.mkdirs(dir);
-            }
-            Path file = new Path(dir, FILE_NAME);
-//            conf.setBoolean("dfs.support.append", true);
-//            out = fs.append(file);
+            Path file = new Path(parent, mapIdString);
+            log.info("map.out.file:" + file.toUri().toString());
+            FileSystem fs = file.getFileSystem(conf);
+            out = fs.create(file);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -72,16 +58,14 @@ public class MachineDataMapper extends IdentityMapper<DoubleDescWritable, Text> 
     @Override
     public void close() throws IOException {
         StringBuilder builder = new StringBuilder();
-        builder.append(mapTaskId);
+        builder.append(mapIdString);
         for (int i = 0; i < reduceNumber; i++) {
             builder.append(",");
             builder.append(reduceInputRecords.get(i));
         }
-        //write ${mapred.output.dir}.reduce.input.records/records
+        builder.append("\n");
         log.info("records:" + builder.toString());
-//        InputStream in = new ByteArrayInputStream(builder.toString().getBytes());
-//        IOUtils.copyBytes(in, out, 4096, true);
-        //todo incr counter
-
+        InputStream in = new ByteArrayInputStream(builder.toString().getBytes());
+        IOUtils.copyBytes(in, out, 4096, true);
     }
 }

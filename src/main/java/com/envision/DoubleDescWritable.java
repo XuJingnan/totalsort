@@ -6,7 +6,7 @@ import org.apache.hadoop.io.WritableComparator;
 /**
  * Created by xujingnan on 15-11-13.
  */
-public class DoubleDescWritable extends DoubleWritable{
+public class DoubleDescWritable extends DoubleWritable {
 
     @Override
     public int compareTo(Object o) {
@@ -15,7 +15,9 @@ public class DoubleDescWritable extends DoubleWritable{
 
     public static class Comparator extends WritableComparator {
 
-        public Comparator() {super(DoubleDescWritable.class);}
+        public Comparator() {
+            super(DoubleDescWritable.class);
+        }
 
         @Override
         public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
