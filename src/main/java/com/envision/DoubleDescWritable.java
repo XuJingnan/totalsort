@@ -1,16 +1,63 @@
 package com.envision;
 
-import org.apache.hadoop.io.DoubleWritable;
+
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.WritableComparator;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 
 /**
  * Created by xujingnan on 15-11-13.
  */
-public class DoubleDescWritable extends DoubleWritable {
+public class DoubleDescWritable implements WritableComparable<DoubleDescWritable> {
+
+    private double value = 0.0;
+
+    public DoubleDescWritable() {
+    }
+
+    public DoubleDescWritable(double value) {
+        set(value);
+    }
+
+    public void set(double value) {
+        this.value = value;
+    }
 
     @Override
-    public int compareTo(Object o) {
-        return -super.compareTo(o);
+    public void write(DataOutput out) throws IOException {
+        out.writeDouble(value);
+    }
+
+    @Override
+    public void readFields(DataInput in) throws IOException {
+        value = in.readDouble();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof DoubleDescWritable)) {
+            return false;
+        }
+        DoubleDescWritable other = (DoubleDescWritable) o;
+        return this.value == other.value;
+    }
+
+    @Override
+    public int hashCode() {
+        return (int) Double.doubleToLongBits(value);
+    }
+
+    @Override
+    public int compareTo(DoubleDescWritable o) {
+        return (value < o.value ? 1 : (value == o.value ? 0 : -1));
+    }
+
+    @Override
+    public String toString() {
+        return Double.toString(value);
     }
 
     public static class Comparator extends WritableComparator {

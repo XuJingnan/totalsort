@@ -2,13 +2,17 @@ package com.envision;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
-import org.apache.hadoop.filecache.DistributedCache;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.*;
-import org.apache.hadoop.mapred.lib.InputSampler;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.partition.InputSampler;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
@@ -18,10 +22,7 @@ import java.net.URI;
  * Created by xujingnan on 15-11-13
  */
 public class TotalOrderSort extends Configured implements Tool {
-    private static final Log LOG = LogFactory.getLog(TotalOrderSort.class);
-    public static final int ADD_POSITION = 352;
-    public static final String CONF_START_POSITION = "start.position";
-    public static final String PARTITION_FILENAME = "_partition.lst";
+    private static final Log log = LogFactory.getLog(TotalOrderSort.class);
     public static int sampleRecordNumbers;
     public static int sampleSplitNumbers;
 
@@ -33,55 +34,54 @@ public class TotalOrderSort extends Configured implements Tool {
      arg4:  sampleRecordNumbers
      arg5:  sampleSplitNumbers
      arg6:  recordInterval
+     arg7:  seperatorFlag 0:"," 1:"\001" other:"\t"
      cmd for example:
-     hadoop jar totalsort-1.0-SNAPSHOT-jar-with-dependencies.jar com.envision.TotalOrderSort
-     input/machinedata output/machinedata 1 10 100000 10 10
+     hadoop jar totalsort-1.1.jar com.envision.TotalOrderSort input/machinedata output/machinedata 1 10 100000 10 10 0
      */
     public int run(String[] args) throws Exception {
-        LOG.info("starting");
+        log.info("starting");
 
-        JobConf conf = (JobConf) getConf();
+        Configuration conf = getConf();
+        Job job = Job.getInstance(conf);
+        conf = job.getConfiguration();
 
         Path inputDir = new Path(args[0]);
         Path outDir = new Path(args[1]);
-        outDir.getFileSystem(conf).delete(outDir, true);
-        conf.setInt(CONF_START_POSITION, Integer.parseInt(args[2]));
-        conf.setNumReduceTasks(Integer.parseInt(args[3]));
-        if (args.length >= 7) {
-            sampleRecordNumbers = Integer.parseInt(args[4]);
-            sampleSplitNumbers = Integer.parseInt(args[5]);
-            conf.setInt(MachineDataTool.RECORD_INTERVAL, Integer.parseInt(args[6]));
-        }
+        FileSystem fs = outDir.getFileSystem(conf);
+        fs.delete(outDir, true);
+        conf.setInt(Tools.CONF_START_POSITION, Integer.parseInt(args[2]));
+        job.setNumReduceTasks(Integer.parseInt(args[3]));
+        sampleRecordNumbers = Integer.parseInt(args[4]);
+        sampleSplitNumbers = Integer.parseInt(args[5]);
+        conf.setInt(Tools.CONF_RECORD_INTERVAL, Integer.parseInt(args[6]));
+        conf.setInt(Tools.CONF_SEPERATOR_FLAG, Integer.parseInt(args[7]));
 
-        conf.setJobName("TotalOrderSort");
-        conf.setJarByClass(TotalOrderSort.class);
-        conf.setMapperClass(MachineDataMapper.class);
-        conf.setReducerClass(MachineDataReducer.class);
-        conf.setInt("dfs.replication", 1);
-        conf.setJobPriority(JobPriority.VERY_HIGH);
+        job.setJobName("TotalOrderSort");
+        job.setJarByClass(TotalOrderSort.class);
+        job.setMapperClass(MachineDataMapper.class);
+        job.setReducerClass(MachineDataReducer.class);
 
-        conf.setInputFormat(MachineDataInputFormat.class);
-        conf.setMapOutputKeyClass(DoubleDescWritable.class);
-        conf.setMapOutputValueClass(Text.class);
-        conf.setOutputFormat(MachineDataOutputFormat.class);
-        conf.setOutputKeyClass(LongWritable.class);
-        conf.setOutputValueClass(Text.class);
+        job.setInputFormatClass(MachineDataInputFormat.class);
+        job.setMapOutputKeyClass(DoubleDescWritable.class);
+        job.setMapOutputValueClass(Text.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
+        job.setOutputKeyClass(NullWritable.class);
+        job.setOutputValueClass(Text.class);
 
-        FileInputFormat.addInputPath(conf, inputDir);
-        FileOutputFormat.setOutputPath(conf, outDir);
-        inputDir = inputDir.makeQualified(inputDir.getFileSystem(conf));
-        Path partitionFile = new Path(inputDir, PARTITION_FILENAME);
-        conf.setPartitionerClass(TotalOrderPartitionWithCounter.class);
+        FileInputFormat.addInputPath(job, inputDir);
+        FileOutputFormat.setOutputPath(job, outDir);
+        inputDir = inputDir.makeQualified(fs.getUri(), fs.getWorkingDirectory());
+        Path partitionFile = new Path(inputDir, Tools.PARTITION_FILENAME);
+        job.setPartitionerClass(TotalOrderPartitionWithCounter.class);
         TotalOrderPartitionWithCounter.setPartitionFile(conf, partitionFile);
         InputSampler.Sampler<DoubleDescWritable, Text> sampler = new InputSampler.SplitSampler<DoubleDescWritable, Text>(sampleRecordNumbers, sampleSplitNumbers);
-        InputSampler.writePartitionFile(conf, sampler);
-        URI partitionUri = new URI(partitionFile.toString() + "#" + PARTITION_FILENAME);
-        DistributedCache.addCacheFile(partitionUri, conf);
-        DistributedCache.createSymlink(conf);
+        InputSampler.writePartitionFile(job, sampler);
+        Tools.printPartitionFile(conf);
+        URI partitionUri = new URI(partitionFile.toString() + "#" + Tools.PARTITION_FILENAME);
+        job.addCacheFile(partitionUri);
 
-        MachineDataOutputFormat.setFinalSync(conf, true);
-        JobClient.runJob(conf);
-        LOG.info("done");
+        job.waitForCompletion(true);
+        log.info("done");
         return 0;
     }
 
@@ -89,7 +89,7 @@ public class TotalOrderSort extends Configured implements Tool {
      * @param args
      */
     public static void main(String[] args) throws Exception {
-        int res = ToolRunner.run(new JobConf(), new TotalOrderSort(), args);
+        int res = ToolRunner.run(null, new TotalOrderSort(), args);
         System.exit(res);
     }
 

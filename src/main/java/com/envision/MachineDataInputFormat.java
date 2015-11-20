@@ -1,38 +1,77 @@
 package com.envision;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.LongWritable;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.*;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.LineRecordReader;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
- * Created by xujingnan on 15-11-13.
+ * Created by xujingnan on 11/19/15.
  */
 public class MachineDataInputFormat extends FileInputFormat<DoubleDescWritable, Text> {
+    public static final Log log = LogFactory.getLog(MachineDataInputFormat.class);
 
-    private JobConf lastConf = null;
-    private InputSplit[] lastResult = null;
+    private JobContext context = null;
+    private List<InputSplit> lastResult = null;
 
-    class MachineDataRecordReader implements RecordReader<DoubleDescWritable, Text> {
-        private LineRecordReader in;
-        private LongWritable junk = new LongWritable();
-        private Text line = new Text();
+    @Override
+    public List<InputSplit> getSplits(JobContext context) throws IOException {
+        if (this.context == context) {
+            return lastResult;
+        }
+        this.context = context;
+        this.lastResult = super.getSplits(context);
+        return lastResult;
+    }
+
+    @Override
+    public RecordReader<DoubleDescWritable, Text> createRecordReader(InputSplit split, TaskAttemptContext context) throws IOException, InterruptedException {
+        return new MachineDataRecordReader();
+    }
+
+    public static class MachineDataRecordReader extends RecordReader<DoubleDescWritable, Text> {
+        private LineRecordReader inReader;
+        private Text originalValue = new Text();
+        private DoubleDescWritable key = new DoubleDescWritable();
+        private Text value = new Text();
         private int startPos;
+        public String seperator;
 
-        public MachineDataRecordReader(Configuration conf, FileSplit split) throws IOException {
-            in = new LineRecordReader(conf, split);
-            startPos = conf.getInt(TotalOrderSort.CONF_START_POSITION, 1);
+        public MachineDataRecordReader() {
+            inReader = new LineRecordReader();
         }
 
         @Override
-        public boolean next(DoubleDescWritable key, Text value) throws IOException {
-            if (in.next(junk, line)) {
-                String tmp = line.toString();
-                tmp = tmp.substring(0, tmp.length() - 1);
-                key.set(Double.parseDouble(tmp.split(",")[startPos + TotalOrderSort.ADD_POSITION - 1]));
-                value.set(tmp);
+        public void initialize(InputSplit split, TaskAttemptContext context) throws IOException, InterruptedException {
+            inReader.initialize(split, context);
+            startPos = Tools.getInt(context, Tools.CONF_START_POSITION, 1);
+            int flag = Tools.getInt(context, Tools.CONF_SEPERATOR_FLAG);
+            switch (flag) {
+                case 0:
+                    seperator = ",";
+                    break;
+                case 1:
+                    seperator = "\001";
+                    break;
+                default:
+                    seperator = "\t";
+            }
+        }
+
+        @Override
+        public boolean nextKeyValue() throws IOException, InterruptedException {
+            if (inReader.nextKeyValue()) {
+                originalValue = inReader.getCurrentValue();
+                key.set(Double.parseDouble(originalValue.toString().split(seperator)[startPos + Tools.ADD_POSITION - 1]));
+                value.set(originalValue);
                 return true;
             } else {
                 return false;
@@ -40,44 +79,27 @@ public class MachineDataInputFormat extends FileInputFormat<DoubleDescWritable, 
         }
 
         @Override
-        public DoubleDescWritable createKey() {
-            return new DoubleDescWritable();
+        public DoubleDescWritable getCurrentKey() throws IOException, InterruptedException {
+            return key;
         }
 
         @Override
-        public Text createValue() {
-            return new Text();
+        public Text getCurrentValue() throws IOException, InterruptedException {
+            return value;
         }
 
         @Override
-        public long getPos() throws IOException {
-            return in.getPos();
+        public float getProgress() throws IOException, InterruptedException {
+            return inReader.getProgress();
         }
 
         @Override
         public void close() throws IOException {
-            in.close();
+            inReader.close();
         }
 
-        @Override
-        public float getProgress() throws IOException {
-            return in.getProgress();
+        public Class getKeyClass() {
+            return DoubleDescWritable.class;
         }
-    }
-
-    @Override
-    public RecordReader<DoubleDescWritable, Text> getRecordReader(InputSplit inputSplit, JobConf conf, Reporter reporter) throws IOException {
-        return new MachineDataRecordReader(conf, (FileSplit) inputSplit);
-    }
-
-    @Override
-    public InputSplit[] getSplits(JobConf conf, int splits) throws IOException {
-        if (conf == lastConf) {
-            return lastResult;
-        }
-        lastConf = conf;
-        lastResult = super.getSplits(conf, splits);
-        return lastResult;
     }
 }
-

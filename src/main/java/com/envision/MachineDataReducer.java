@@ -2,73 +2,67 @@ package com.envision;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.OutputCollector;
-import org.apache.hadoop.mapred.Reducer;
-import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.Reducer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Iterator;
 
 /**
  * Created by xujingnan on 15-11-13.
  */
-public class MachineDataReducer implements Reducer<DoubleDescWritable, Text, LongWritable, Text> {
-    private static final Log log = LogFactory.getLog(MachineDataMapper.class);
+public class MachineDataReducer extends Reducer<DoubleDescWritable, Text, NullWritable, Text> {
+    private static final Log log = LogFactory.getLog(MachineDataReducer.class);
     private int[] reduceInputRecords;
     private OutputRecordIndex outputRecordIndex;
     private Integer nextIndex;
     private int point = -1;
 
     @Override
-    public void reduce(DoubleDescWritable key, Iterator<Text> values, OutputCollector<LongWritable, Text> collector, Reporter reporter) throws IOException {
-        while (nextIndex != null && values.hasNext()) {
-            Text value = values.next();
+    protected void reduce(DoubleDescWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+        String tab = "\t";
+        for (Text value : values) {
             point++;
-            if (point == nextIndex) {
-                //todo test value
-                Text tmp = new Text();
-                tmp.append(key.toString().getBytes(), 0, key.toString().getBytes().length);
-                String tab = "\t";
-                tmp.append(tab.getBytes(), 0, tab.getBytes().length);
-                tmp.append(value.getBytes(), 0, value.getBytes().length);
-                value.set(tmp);
+            if (nextIndex != null) {
+                if (point == nextIndex) {
+                    Text tmp = new Text();
+                    Long globalIndex = outputRecordIndex.getTotalOrderIndex(nextIndex);
+                    tmp.append(globalIndex.toString().getBytes(), 0, globalIndex.toString().getBytes().length);
+                    tmp.append(tab.toString().getBytes(), 0, tab.toString().getBytes().length);
+                    tmp.append(key.toString().getBytes(), 0, key.toString().getBytes().length);
+                    tmp.append(tab.getBytes(), 0, tab.getBytes().length);
+                    tmp.append(value.getBytes(), 0, value.getBytes().length);
+                    value.set(tmp);
 
-                collector.collect(new LongWritable(outputRecordIndex.getTotalOrderIndex(nextIndex)), value);
-                nextIndex = outputRecordIndex.next();
+                    context.write(NullWritable.get(), value);
+                    nextIndex = outputRecordIndex.next();
+                }
+            } else {
+                break;
             }
         }
     }
 
     @Override
-    public void close() throws IOException {
-
-    }
-
-    @Override
-    public void configure(JobConf conf) {
-        int reduceNumber = conf.getNumReduceTasks();
+    protected void setup(Context context) throws IOException, InterruptedException {
+        super.setup(context);
+        int reduceNumber = context.getNumReduceTasks();
         reduceInputRecords = new int[reduceNumber];
-        int reduceId = Integer.parseInt(MachineDataTool.getID(conf.get("mapred.task.id"), false));
+        int reduceId = Integer.parseInt(Tools.getID(context.getTaskAttemptID().toString(), false));
+        Configuration conf = context.getConfiguration();
 
-        int mapNumber = conf.getNumMapTasks();
         String line;
         try {
-            Path parentPath = MachineDataTool.getReduceInputRecordsPath(conf.get("mapred.output.dir"));
+            Path parentPath = Tools.getReduceInputRecordsPath(context);
             FileSystem fs = parentPath.getFileSystem(conf);
             FileStatus[] fileStatuses = fs.listStatus(parentPath);
-            if (fileStatuses.length != mapNumber) {
-                log.error("map output reduceInputRecords error!!");
-                return;
-            }
             log.info("start to read all map out temp file");
             for (FileStatus file : fileStatuses) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(file.getPath())));
@@ -85,7 +79,7 @@ public class MachineDataReducer implements Reducer<DoubleDescWritable, Text, Lon
             e.printStackTrace();
         }
 
-        int recordInterval = conf.getInt(MachineDataTool.RECORD_INTERVAL, 10000000);
+        int recordInterval = Tools.getInt(context, Tools.CONF_RECORD_INTERVAL, 10000000);
         outputRecordIndex = new OutputRecordIndex(reduceId, recordInterval);
         nextIndex = outputRecordIndex.next();
     }

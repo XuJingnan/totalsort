@@ -2,15 +2,13 @@ package com.envision;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.OutputCollector;
-import org.apache.hadoop.mapred.Reporter;
-import org.apache.hadoop.mapred.lib.IdentityMapper;
+import org.apache.hadoop.mapreduce.Mapper;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -20,7 +18,7 @@ import java.util.ArrayList;
 /**
  * Created by xujingnan on 15-11-13.
  */
-public class MachineDataMapper extends IdentityMapper<DoubleDescWritable, Text> {
+public class MachineDataMapper extends Mapper<DoubleDescWritable, Text, DoubleDescWritable, Text> {
     private final Log log = LogFactory.getLog(MachineDataMapper.class);
     public static ArrayList<Integer> reduceInputRecords;
     private int reduceNumber;
@@ -28,21 +26,21 @@ public class MachineDataMapper extends IdentityMapper<DoubleDescWritable, Text> 
     private FSDataOutputStream out;
 
     @Override
-    public void configure(JobConf conf) {
-        super.configure(conf);
-
-        reduceNumber = conf.getNumReduceTasks();
+    protected void setup(Context context) throws IOException, InterruptedException {
+        super.setup(context);
+        reduceNumber = context.getNumReduceTasks();
         reduceInputRecords = new ArrayList<Integer>(reduceNumber);
         for (int i = 0; i < reduceNumber; i++) {
             reduceInputRecords.add(0);
         }
-        mapIdString = MachineDataTool.getID(conf.get("mapred.task.id"), true);
+        mapIdString = Tools.getID(context.getTaskAttemptID().toString(), true);
         log.info("task id:" + mapIdString);
 
-        Path parent = MachineDataTool.getReduceInputRecordsPath(conf.get("mapred.output.dir"));
+        Configuration conf = context.getConfiguration();
+        Path parent = Tools.getReduceInputRecordsPath(context);
         try {
             Path file = new Path(parent, mapIdString);
-            log.info("map.out.file:" + file.toUri().toString());
+            log.info("map.out.file:" + file);
             FileSystem fs = file.getFileSystem(conf);
             out = fs.create(file);
         } catch (IOException e) {
@@ -51,12 +49,12 @@ public class MachineDataMapper extends IdentityMapper<DoubleDescWritable, Text> 
     }
 
     @Override
-    public void map(DoubleDescWritable key, Text val, OutputCollector<DoubleDescWritable, Text> output, Reporter reporter) throws IOException {
-        super.map(key, val, output, reporter);
+    protected void map(DoubleDescWritable key, Text value, Context context) throws IOException, InterruptedException {
+        super.map(key, value, context);
     }
 
     @Override
-    public void close() throws IOException {
+    protected void cleanup(Context context) throws IOException, InterruptedException {
         StringBuilder builder = new StringBuilder();
         builder.append(mapIdString);
         for (int i = 0; i < reduceNumber; i++) {
@@ -67,5 +65,6 @@ public class MachineDataMapper extends IdentityMapper<DoubleDescWritable, Text> 
         log.info("records:" + builder.toString());
         InputStream in = new ByteArrayInputStream(builder.toString().getBytes());
         IOUtils.copyBytes(in, out, 4096, true);
+        super.cleanup(context);
     }
 }
