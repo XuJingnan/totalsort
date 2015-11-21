@@ -26,6 +26,11 @@ public class MachineDataCombineFileInputFormat extends CombineFileInputFormat<Do
     private JobContext context = null;
     private List<InputSplit> lastResult = null;
 
+    public MachineDataCombineFileInputFormat() {
+        super();
+        setMaxSplitSize(256 * 1024 * 1024);
+    }
+
     @Override
     public List<InputSplit> getSplits(JobContext context) throws IOException {
         if (this.context == context) {
