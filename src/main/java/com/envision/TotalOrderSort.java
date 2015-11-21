@@ -61,7 +61,7 @@ public class TotalOrderSort extends Configured implements Tool {
         job.setMapperClass(MachineDataMapper.class);
         job.setReducerClass(MachineDataReducer.class);
 
-        job.setInputFormatClass(MachineDataInputFormat.class);
+        job.setInputFormatClass(MachineDataCombineFileInputFormat.class);
         job.setMapOutputKeyClass(DoubleDescWritable.class);
         job.setMapOutputValueClass(Text.class);
         job.setOutputFormatClass(TextOutputFormat.class);

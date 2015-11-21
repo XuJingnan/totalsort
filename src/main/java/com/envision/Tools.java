@@ -14,7 +14,6 @@ import org.apache.hadoop.mapreduce.lib.partition.TotalOrderPartitioner;
 import org.apache.hadoop.util.ReflectionUtils;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 
 /**
@@ -88,7 +87,7 @@ public class Tools {
     }
 
     private static ArrayList<DoubleDescWritable> readPartitions(FileSystem fs, Path p, Class<DoubleDescWritable> keyClass,
-                                                Configuration conf) throws IOException {
+                                                                Configuration conf) throws IOException {
         SequenceFile.Reader reader = new SequenceFile.Reader(fs, p, conf);
         ArrayList<DoubleDescWritable> parts = new ArrayList<DoubleDescWritable>();
         DoubleDescWritable key = ReflectionUtils.newInstance(keyClass, conf);
