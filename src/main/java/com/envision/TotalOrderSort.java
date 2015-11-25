@@ -86,9 +86,12 @@ public class TotalOrderSort extends Configured implements Tool {
 
         Job outputJob = Job.getInstance(new Configuration());
         FileInputFormat.setInputPaths(outputJob, inputDir);
-        outputJob.getConfiguration().set(Tools.TEMP_HDFS_PATH, tmpDir.toString());
+        Configuration outputJobConfig = outputJob.getConfiguration();
+        outputJobConfig.set(Tools.TEMP_HDFS_PATH, tmpDir.toString());
+        outputJobConfig.setInt(Tools.CONF_START_POSITION, Integer.parseInt(args[2]));
+        outputJobConfig.setInt(Tools.CONF_SEPERATOR_FLAG, Integer.parseInt(args[7]));
         FileOutputFormat.setOutputPath(outputJob, outDir);
-        fs = outDir.getFileSystem(outputJob.getConfiguration());
+        fs = outDir.getFileSystem(outputJobConfig);
         fs.delete(outDir, true);
         outputJob.setJobName("TotalOrderSort.output");
         outputJob.setJarByClass(TotalOrderSort.class);
