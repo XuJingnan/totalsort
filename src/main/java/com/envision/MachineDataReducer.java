@@ -28,7 +28,6 @@ public class MachineDataReducer extends Reducer<DoubleDescWritable, Text, NullWr
     @Override
     protected void reduce(DoubleDescWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
         for (Text value : values) {
-            value = new Text(value);
             point++;
             if (nextIndex != null) {
                 if (point == nextIndex) {
