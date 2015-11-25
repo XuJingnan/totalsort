@@ -9,6 +9,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.lib.input.CombineFileSplit;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -24,6 +25,8 @@ public class MachineDataMapper extends Mapper<DoubleDescWritable, Text, DoubleDe
     private int reduceNumber;
     private String mapIdString;
     private FSDataOutputStream out;
+    private String inputSplitIdentifier;
+    int recordIndex;
 
     @Override
     protected void setup(Context context) throws IOException, InterruptedException {
@@ -34,6 +37,8 @@ public class MachineDataMapper extends Mapper<DoubleDescWritable, Text, DoubleDe
             reduceInputRecords.add(0);
         }
         mapIdString = Tools.getID(context.getTaskAttemptID().toString(), true);
+        inputSplitIdentifier = Tools.getInputSplitIdentifier((CombineFileSplit) context.getInputSplit());
+        recordIndex = 0;
         log.info("task id:" + mapIdString);
 
         Configuration conf = context.getConfiguration();
@@ -50,7 +55,8 @@ public class MachineDataMapper extends Mapper<DoubleDescWritable, Text, DoubleDe
 
     @Override
     protected void map(DoubleDescWritable key, Text value, Context context) throws IOException, InterruptedException {
-        super.map(key, value, context);
+        recordIndex++;
+        super.map(key, new Text(inputSplitIdentifier + "." + Integer.toString(recordIndex)), context);
     }
 
     @Override

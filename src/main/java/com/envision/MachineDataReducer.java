@@ -27,21 +27,16 @@ public class MachineDataReducer extends Reducer<DoubleDescWritable, Text, NullWr
 
     @Override
     protected void reduce(DoubleDescWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-        String tab = "\t";
         for (Text value : values) {
             point++;
             if (nextIndex != null) {
                 if (point == nextIndex) {
-                    Text tmp = new Text();
                     Long globalIndex = outputRecordIndex.getTotalOrderIndex(nextIndex);
-                    tmp.append(globalIndex.toString().getBytes(), 0, globalIndex.toString().getBytes().length);
-                    tmp.append(tab.toString().getBytes(), 0, tab.toString().getBytes().length);
-                    tmp.append(key.toString().getBytes(), 0, key.toString().getBytes().length);
-                    tmp.append(tab.getBytes(), 0, tab.getBytes().length);
-                    tmp.append(value.getBytes(), 0, value.getBytes().length);
-                    value.set(tmp);
-
-                    context.write(NullWritable.get(), value);
+                    StringBuilder builder = new StringBuilder();
+                    builder.append(Long.toString(globalIndex) + Tools.TAB);
+                    builder.append(key.toString() + Tools.TAB);
+                    builder.append(value.toString());
+                    context.write(NullWritable.get(), new Text(builder.toString()));
                     nextIndex = outputRecordIndex.next();
                 }
             } else {

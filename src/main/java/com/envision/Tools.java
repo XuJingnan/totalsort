@@ -9,6 +9,7 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.lib.input.CombineFileSplit;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.partition.TotalOrderPartitioner;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -27,7 +28,9 @@ public class Tools {
     public static final String CONF_SEPERATOR_FLAG = "input.value.field.seperator.flag";
     public static final String CONF_START_POSITION = "start.position.to.sort";
     public static final String PARTITION_FILENAME = "_partition.lst";
+    public static final String TEMP_HDFS_PATH = "temp.hdfs.path";
     public static final int ADD_POSITION = 352;
+    public static final String TAB = "\t";
 
     private static final Log log = LogFactory.getLog(Tools.class);
 
@@ -101,5 +104,19 @@ public class Tools {
             reader.close();
         }
         return parts;
+    }
+
+    public static String getInputSplitIdentifier(CombineFileSplit inputSplit) {
+        StringBuilder builder = new StringBuilder();
+        Path[] paths = inputSplit.getPaths();
+        long[] starts = inputSplit.getStartOffsets();
+        long[] lens = inputSplit.getLengths();
+        builder.append("[");
+        for (int i = 0; i < paths.length; i++) {
+            builder.append(paths[i] + ":" + starts[i] + "," + lens[i] + ";");
+        }
+        builder.setLength(builder.length() - 1);
+        builder.append("]");
+        return builder.toString();
     }
 }
