@@ -29,6 +29,7 @@ public class MachineDataReducer extends Reducer<DoubleDescWritable, Text, NullWr
     protected void reduce(DoubleDescWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
         String tab = "\t";
         for (Text value : values) {
+            value = new Text(value);
             point++;
             if (nextIndex != null) {
                 if (point == nextIndex) {
